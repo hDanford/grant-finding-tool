@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>First Responder Wellness Grant Finder</title>
+  <title>First Responder Wellness Grant Finder Tool</title>
   <style>
     :root { --maxw: 880px; }
     body { font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; color:#111; display:flex; justify-content:center; }
@@ -22,6 +22,7 @@
     a { color:#0645ad; text-decoration:none; }
     a:hover { text-decoration:underline; }
     .muted { color:#666; font-size:.9em; }
+    input[type="text"] { width:100%; max-width: 680px; padding:.6rem .8rem; border-radius:8px; border:1px solid #ccc; }
   </style>
 </head>
 <body>
@@ -45,7 +46,7 @@
   <!-- Results -->
   <section style="margin-top:1.25rem">
     <div id="controls" style="display:none; margin-bottom:.5rem;">
-      <input id="q" placeholder="Filter results (e.g., wellness, Ohio, DHS)" style="width:100%; max-width: 680px; padding:.6rem .8rem; border-radius:8px; border:1px solid #ccc;" />
+      <input id="q" type="text" placeholder="Filter results (e.g., wellness, Ohio, DHS)" />
     </div>
     <div id="list"></div>
   </section>
@@ -94,8 +95,8 @@ async function loadGrants() {
     btn.textContent = "Loading…";
     statsEl.textContent = "Fetching latest data…";
 
-    // Cache-bust with timestamp; path assumes this file lives in /docs
-    const res = await fetch("../data/grants.json?ts=" + Date.now(), { cache: "no-store" });
+    // Pages source is root → JSON is at /data/grants.json relative to this page
+    const res = await fetch("./data/grants.json?ts=" + Date.now(), { cache: "no-store" });
     if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
 
