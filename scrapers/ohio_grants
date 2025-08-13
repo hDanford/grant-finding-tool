@@ -1,0 +1,138 @@
+# scrapers/ohio_grants.py
+# Scrapes the public State of Ohio Funding Opportunities list and links to
+# the Ohio Grants Portal detail pages (which render via JavaScript).
+# Please respect robots.txt and site ToS (single page fetch + polite parsing).
+
+import re
+import time
+import requests
+from bs4 import BeautifulSoup
+from dateutil import parser as dp
+from .base import clean, make_item
+
+SOURCE_SLUG = "ohio-grants"
+START_URL   = "https://grants.ohio.gov/funding-opportunities"
+DETAIL_RE   = re.compile(r"FundingOpportunityDetails\?detailid=([a-f0-9-]{36})", re.I)
+
+# Keep in sync with grants_gov keywords so your UI shows the same defaults
+KEYWORDS = [
+    "first responder", "first responders", "wellness", "mental health",
+    "behavioral health", "psychological evaluation", "pre-employment",
+    "critical incident", "stress debriefing", "fitness for duty", "peer support",
+    "cisd",
+]
+
+HEADERS = {"User-Agent": "first-responder-grant-finder/1.0 (+github)"}
+
+def _iso_or_none(s):
+    s = (s or "").strip()
+    if not s: return None
+    try:
+        return dp.parse(s, fuzzy=True).date().isoformat()
+    except Exception:
+        return None
+
+def _row_texts(row):
+    """Return list of cell texts for a <tr> or a generic container."""
+    cells = []
+    # try table cells first
+    for td in row.select("td"):
+        t = clean(td.get_text(" ", strip=True))
+        if t: cells.append(t)
+    if cells:
+        return cells
+    # generic fallback
+    t = clean(row.get_text(" ", strip=True))
+    return [t] if t else []
+
+def _relevant(text):
+    t = (text or "").lower()
+    return any(k in t for k in KEYWORDS)
+
+def fetch():
+    items, seen = [], set()
+    r = requests.get(START_URL, headers=HEADERS, timeout=40)
+    r.raise_for_status()
+    html = r.text
+    soup = BeautifulSoup(html, "html.parser")
+
+    # 1) Find all links to the Ohio Grants Portal detail pages (GUID in query string)
+    links = []
+    for a in soup.select("a[href]"):
+        href = a.get("href") or ""
+        m = DETAIL_RE.search(href)
+        if not m:
+            continue
+        detail_id = m.group(1).lower()
+        if detail_id in seen:
+            continue
+        seen.add(detail_id)
+        # Normalize absolute link
+        if href.startswith("/"):
+            href = "https://grantsportal.ohio.gov" + href
+        elif href.startswith("https://") is False:
+            href = "https://grantsportal.ohio.gov/" + href.lstrip("/")
+        links.append((a, href))
+
+    # 2) Walk up to an enclosing row/container to extract metadata that’s visible in the list
+    for a, detail_url in links:
+        # Try to find row/container
+        row = a.find_parent("tr") or a.find_parent(class_=re.compile(r"(row|item|card|result)", re.I)) or a.parent
+        cells = _row_texts(row) if row else []
+
+        # Heuristics: title from anchor text; agency/category/date from sibling cells if present.
+        title = clean(a.get_text(" ", strip=True)) or "Ohio Funding Opportunity"
+        agency = None
+        categories = []
+        deadline = None
+        posted = None
+
+        # Pull dates present in the row snippet
+        blob = " | ".join(cells) if cells else clean(row.get_text(" ", strip=True) if row else "")
+        # Look for a likely application end date first
+        # Examples on the site often show MM/DD/YYYY
+        date_matches = re.findall(r"\b\d{1,2}/\d{1,2}/\d{2,4}\b", blob)
+        if date_matches:
+            # Assume last date is the deadline; first date may be posted/start
+            deadline = _iso_or_none(date_matches[-1])
+            posted = _iso_or_none(date_matches[0]) if len(date_matches) > 1 else None
+
+        # Try to infer agency / category by keywords appearing in cell texts
+        for c in cells:
+            lc = c.lower()
+            if "agency" in lc or "department" in lc or "office" in lc:
+                agency = c
+            if "category" in lc or "categories" in lc:
+                # naive split
+                parts = [p.strip() for p in re.split(r"[;,/]", c) if p.strip()]
+                categories.extend(parts)
+
+        # Fallback relevance: filter on title+row text to keep results on-topic
+        if not _relevant((title + " " + blob)):
+            continue
+
+        desc = f"State of Ohio funding opportunity. See portal page for full details."
+        tags = ["state", "ohio"]
+        if "first responder" in (title + " " + blob).lower(): tags.append("first-responders")
+        if "wellness" in (title + " " + blob).lower(): tags.append("wellness")
+
+        item = make_item(
+            title=title,
+            url=detail_url,
+            source=SOURCE_SLUG,
+            description=desc,
+            posted_date=posted,
+            deadline_date=deadline,
+            tags=tags,
+        )
+        # Site-specific fields for UI filters
+        item.update({
+            "agency_name": agency,
+            "ohio_categories": list(dict.fromkeys([c for c in categories if c])),
+            "opp_status": None,  # unknown in list view
+        })
+        items.append(item)
+
+    # Be polite
+    time.sleep(0.3)
+    return items
