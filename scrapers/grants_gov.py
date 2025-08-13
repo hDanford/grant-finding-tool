@@ -1,15 +1,14 @@
 # scrapers/grants_gov.py
-# Official Grants.gov REST APIs (no auth required):
-# - search2  → find opportunities
-# - fetchOpportunity → get detailed description
-# Docs: https://www.grants.gov/api (see "Applicant API" → search2/fetchOpportunity)
-# Auth: not required for search2/fetchOpportunity.
+# Grants.gov public REST APIs (no auth for search2/fetchOpportunity).
+# Docs:
+# - search2: https://api.grants.gov/v1/api/search2
+# - fetchOpportunity: https://api.grants.gov/v1/api/fetchOpportunity
 
 import re
 import time
 import requests
 from dateutil import parser as dp
-from .base import clean, make_item  # note: we skip base.relevant to avoid over-filtering
+from .base import clean, make_item  # we'll extend item with extra fields
 
 SOURCE_SLUG = "grants.gov"
 SEARCH_URL = "https://api.grants.gov/v1/api/search2"
@@ -19,7 +18,7 @@ HEADERS = {
     "Content-Type": "application/json",
 }
 
-# Query terms tuned to your use case
+# Default keywords used by the scraper (shown in UI as starting keywords)
 KEYWORDS = [
     "first responder",
     "first responders",
@@ -32,7 +31,7 @@ KEYWORDS = [
     "stress debriefing",
     "fitness for duty",
     "peer support",
-    "cisd"
+    "cisd",
 ]
 
 def _post_json(url, body):
@@ -40,17 +39,16 @@ def _post_json(url, body):
     r.raise_for_status()
     return r.json()
 
-def _search_keyword(word: str, max_rows: int = 300):
-    """Page through search2 for a single keyword."""
+def _search_keyword(word: str, max_rows: int = 400):
+    """Page through search2 for one keyword."""
     start, rows = 0, 100
     hits = []
     while start < max_rows:
         body = {
             "keyword": word,
-            "oppStatuses": "forecasted|posted",
+            "oppStatuses": "forecasted|posted",  # looking forward + open
             "startRecordNum": start,
             "rows": rows,
-            # You can add more filters here (agencies, categories, eligibilities) if desired.
         }
         payload = _post_json(SEARCH_URL, body).get("data") or {}
         page = payload.get("oppHits") or []
@@ -60,27 +58,38 @@ def _search_keyword(word: str, max_rows: int = 300):
         start += rows
         if start >= int(payload.get("hitCount") or 0):
             break
-        time.sleep(0.2)  # be polite
+        time.sleep(0.15)
     return hits
 
-def _detail_desc(opp_id: int) -> str:
-    """Fetch detailed description text from fetchOpportunity."""
+def _detail_desc_and_meta(opp_id: int):
+    """Fetch description + detail facets from fetchOpportunity."""
     try:
         data = _post_json(FETCH_URL, {"opportunityId": int(opp_id)}).get("data") or {}
     except Exception:
-        return ""
+        return "", {}, {}, {}, [], []
 
     syn = data.get("synopsis") or {}
     forecast = data.get("forecast") or {}
+
+    # Description
     desc = (
         syn.get("synopsisDesc")
         or syn.get("opportunityDescription")
         or forecast.get("forecastDescription")
         or ""
     )
-    # strip HTML tags
     desc = re.sub(r"<[^>]+>", " ", str(desc))
-    return clean(desc)
+    desc = clean(desc)
+
+    # Facets
+    agency_name = syn.get("agencyName") or (data.get("agencyDetails") or {}).get("agencyName")
+    opp_status = (syn.get("docType") or data.get("docType") or "").lower()  # synopsis/forecast
+    funding_instr = [fi.get("description") for fi in (syn.get("fundingInstruments") or []) if fi.get("description")]
+    funding_cats  = [fa.get("description") for fa in (syn.get("fundingActivityCategories") or []) if fa.get("description")]
+    eligs         = [e.get("description") for e in (syn.get("applicantTypes") or []) if e.get("description")]
+    alns          = [a.get("alnNumber") for a in (data.get("alns") or []) if a.get("alnNumber")]
+
+    return desc, agency_name, opp_status, funding_instr, funding_cats, eligs, alns
 
 def fetch():
     out, seen = [], set()
@@ -94,6 +103,10 @@ def fetch():
 
             title = clean(h.get("title") or h.get("opportunityTitle") or "")
             url = f"https://www.grants.gov/search-results-detail/{opp_id}"
+            agency_code = h.get("agencyCode")
+            agency_name_hit = h.get("agencyName")
+            opp_status_hit = (h.get("oppStatus") or "").lower()
+            doc_type = h.get("docType") or ""
 
             # Dates
             open_date = h.get("openDate") or h.get("postedDate") or ""
@@ -107,25 +120,31 @@ def fetch():
             except Exception:
                 deadline = None
 
-            desc = _detail_desc(opp_id)
+            # Detail
+            desc, agency_name, opp_status, finstr, fcat, eligs, alns = _detail_desc_and_meta(opp_id)
 
-            # Basic tags
-            tags = ["federal", "grants.gov"]
-            blob = f"{title} {desc}".lower()
-            if "first responder" in blob:
-                tags.append("first-responders")
-            if "wellness" in blob:
-                tags.append("wellness")
-
-            out.append(
-                make_item(
-                    title=title or f"Grants.gov Opportunity {opp_id}",
-                    url=url,
-                    source=SOURCE_SLUG,
-                    description=desc,
-                    posted_date=posted,
-                    deadline_date=deadline,
-                    tags=tags,
-                )
+            item = make_item(
+                title=title or f"Grants.gov Opportunity {opp_id}",
+                url=url,
+                source=SOURCE_SLUG,
+                description=desc,
+                posted_date=posted,
+                deadline_date=deadline,
+                tags=["federal", "grants.gov"],
             )
+
+            # enrich with filterable fields
+            item.update({
+                "opportunity_number": h.get("number"),
+                "agency_code": agency_code,
+                "agency_name": agency_name or agency_name_hit,
+                "opp_status": (opp_status or opp_status_hit),
+                "doc_type": doc_type,
+                "funding_instruments": finstr or [],
+                "funding_categories": fcat or [],
+                "eligibilities": eligs or [],
+                "alns": alns or (h.get("alnist") or []),
+            })
+
+            out.append(item)
     return out
