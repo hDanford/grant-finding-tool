@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>First Responder Wellness Grant Finder Tool</title>
   <style>
-    :root { --maxw: 880px; }
+    :root { --maxw: 1000px; }
     body { font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; color:#111; display:flex; justify-content:center; }
     main { width:100%; max-width: var(--maxw); }
     h1 { margin: 0 0 .25rem; }
@@ -13,8 +13,9 @@
     .card { border:1px solid #eee; border-radius:12px; padding:1rem; background:#fafafa; }
     .row { margin: .8rem 0; padding: 1rem; border: 1px solid #eee; border-radius: 10px; background: #fff; }
     .meta { font-size: .9em; color: #555; margin-top: .25rem; }
-    .tags { font-size: .85em; color:#444; margin-top: .25rem; }
-    .tag { background:#eef; padding:.1rem .4rem; margin-right:.35rem; border-radius:.4rem; display:inline-block; }
+    .tags { font-size: .85em; color:#444; margin-top: .25rem; display:flex; flex-wrap:wrap; gap:.35rem; }
+    .tag, .chip { background:#eef; padding:.2rem .5rem; border-radius:.6rem; display:inline-flex; align-items:center; gap:.35rem; }
+    .chip button { border:none; background:transparent; cursor:pointer; font-weight:700; }
     .bar { margin: .75rem 0 1rem; min-height: 1.2em; color:#333; }
     button { padding: .6rem .95rem; border-radius: 10px; border:1px solid #ccc; background:#fff; cursor:pointer; font-weight:600; }
     button:hover { background:#f3f3f3; }
@@ -22,8 +23,16 @@
     a { color:#0645ad; text-decoration:none; }
     a:hover { text-decoration:underline; }
     .muted { color:#666; font-size:.9em; }
-    input[type="text"] { width:100%; max-width: 680px; padding:.6rem .8rem; border-radius:8px; border:1px solid #ccc; }
+    input[type="text"] { padding:.5rem .7rem; border-radius:8px; border:1px solid #ccc; }
+    select, .pill { padding:.45rem .6rem; border-radius:8px; border:1px solid #ccc; background:#fff; }
+    .grid { display:grid; gap:.75rem; grid-template-columns: repeat(12, 1fr); }
+    .col-12 { grid-column: span 12; }
+    .col-6  { grid-column: span 6; }
+    .controls { margin-top:1rem; }
     .empty { color:#666; font-style: italic; margin-top:.5rem; }
+    .inline { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+    .pill { display:inline-flex; gap:.4rem; align-items:center; }
+    .pill input { margin-right:.35rem; }
   </style>
 </head>
 <body>
@@ -44,56 +53,179 @@
 
     <button id="loadBtn" type="button">Update / Load Grants</button>
     <div class="bar" id="stats" aria-live="polite"></div>
-    <div class="muted">Tip: the button pulls the latest published data from <code>data/grants.json</code>.</div>
+    <div class="muted">The button reads <code>data/grants.json</code> (built by your GitHub Action). Edit keywords & filters below to refine what you see.</div>
+  </section>
+
+  <!-- Keyword editor + filters -->
+  <section class="controls card">
+    <h3 style="margin-top:0">Search keywords (editable)</h3>
+    <div id="kwChips" class="inline" aria-live="polite"></div>
+    <div class="inline" style="margin-top:.5rem;">
+      <input id="kwInput" type="text" placeholder="Add keyword (e.g., 'first responder')" />
+      <button id="kwAddBtn" type="button">Add keyword</button>
+      <button id="kwClearBtn" type="button">Clear all</button>
+    </div>
+    <div class="muted" style="margin-top:.25rem">These keywords filter the loaded results on this page. To change the scraper's default keywords, edit <code>scrapers/grants_gov.py</code> and push.</div>
+
+    <h3>Filters</h3>
+    <div class="grid">
+      <div class="col-6">
+        <label><strong>Agency</strong></label><br/>
+        <select id="fAgency" multiple size="6" style="width:100%;"></select>
+      </div>
+      <div class="col-6">
+        <label><strong>Grant type (Funding Instrument)</strong></label><br/>
+        <select id="fType" multiple size="6" style="width:100%;"></select>
+      </div>
+      <div class="col-12">
+        <div class="inline">
+          <span><strong>Status:</strong></span>
+          <label class="pill"><input type="checkbox" name="status" value="posted"> posted</label>
+          <label class="pill"><input type="checkbox" name="status" value="forecasted"> forecasted</label>
+          <label class="pill"><input type="checkbox" name="status" value="closed"> closed</label>
+          <label class="pill"><input type="checkbox" name="status" value="archived"> archived</label>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- Results -->
   <section style="margin-top:1.25rem">
-    <div id="controls" style="display:none; margin-bottom:.5rem;">
-      <input id="q" type="text" placeholder="Filter results (e.g., wellness, Ohio, DOJ, DHS)" />
-    </div>
     <div id="list"></div>
   </section>
 </main>
 
 <script>
-const state = { items: [], metaTime: "" };
+const state = {
+  items: [],
+  metaTime: "",
+  defaultKeywords: [],   // from JSON meta
+  userKeywords: [],      // editable list
+  facets: { agencies: [], types: [], statuses: [] },
+  selected: { agencies: new Set(), types: new Set(), statuses: new Set() },
+};
 
 function sanitize(text) {
   return (text || "").replace(/</g, "&lt;");
 }
 
-function render(filter="") {
+function uniqueSorted(arr) {
+  return [...new Set(arr.filter(Boolean))].sort((a,b) => a.localeCompare(b));
+}
+
+function buildFacets(items) {
+  const agencies = [];
+  const types = [];
+  const statuses = [];
+  for (const it of items) {
+    if (it.agency_name) agencies.push(it.agency_name);
+    if (Array.isArray(it.funding_instruments)) types.push(...it.funding_instruments);
+    if (it.opp_status) statuses.push(it.opp_status);
+  }
+  state.facets.agencies = uniqueSorted(agencies);
+  state.facets.types    = uniqueSorted(types);
+  state.facets.statuses = uniqueSorted(statuses);
+}
+
+function hydrateFilters() {
+  // Agencies
+  const fa = document.getElementById("fAgency");
+  fa.innerHTML = state.facets.agencies.map(a => `<option value="${sanitize(a)}">${sanitize(a)}</option>`).join("");
+  fa.addEventListener("change", () => {
+    state.selected.agencies = new Set([...fa.selectedOptions].map(o => o.value));
+    render();
+  });
+
+  // Types
+  const ft = document.getElementById("fType");
+  ft.innerHTML = state.facets.types.map(t => `<option value="${sanitize(t)}">${sanitize(t)}</option>`).join("");
+  ft.addEventListener("change", () => {
+    state.selected.types = new Set([...ft.selectedOptions].map(o => o.value));
+    render();
+  });
+
+  // Status checkboxes
+  document.querySelectorAll("input[name='status']").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const s = new Set();
+      document.querySelectorAll("input[name='status']:checked").forEach(x => s.add(x.value));
+      state.selected.statuses = s;
+      render();
+    });
+  });
+}
+
+function renderKeywordChips() {
+  const wrap = document.getElementById("kwChips");
+  if (!state.userKeywords.length) {
+    wrap.innerHTML = `<span class="muted">No keywords set. (Showing all loaded results)</span>`;
+    return;
+  }
+  wrap.innerHTML = state.userKeywords.map((kw, i) => `
+    <span class="chip">${sanitize(kw)} <button data-idx="${i}" title="Remove ${sanitize(kw)}">×</button></span>
+  `).join("");
+  wrap.querySelectorAll("button[data-idx]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.getAttribute("data-idx"));
+      state.userKeywords.splice(idx, 1);
+      renderKeywordChips();
+      render();
+    });
+  });
+}
+
+function render() {
   const listEl = document.getElementById("list");
   const statsEl = document.getElementById("stats");
-  const qEl = document.getElementById("q");
 
-  const f = (filter || "").trim().toLowerCase();
-  const shown = !f ? state.items : state.items.filter(it => {
-    const blob = [it.title, it.description, it.source, (it.tags||[]).join(" ")].join(" ").toLowerCase();
-    return f.split(/\s+/).every(tok => blob.includes(tok));
+  // Apply filters to items
+  const kw = state.userKeywords.map(s => s.toLowerCase());
+  const shown = state.items.filter(it => {
+    // Keyword filter (ANY match among keywords)
+    if (kw.length) {
+      const blob = [it.title, it.description, it.agency_name, (it.tags||[]).join(" "), (it.funding_instruments||[]).join(" ")].join(" ").toLowerCase();
+      const any = kw.some(k => blob.includes(k));
+      if (!any) return false;
+    }
+    // Agency filter
+    if (state.selected.agencies.size && !state.selected.agencies.has(it.agency_name)) return false;
+    // Type filter
+    if (state.selected.types.size) {
+      const found = (it.funding_instruments||[]).some(t => state.selected.types.has(t));
+      if (!found) return false;
+    }
+    // Status filter
+    if (state.selected.statuses.size && !state.selected.statuses.has((it.opp_status||"").toLowerCase())) return false;
+
+    return true;
   });
 
   statsEl.textContent = `${shown.length} result${shown.length===1?"":"s"} — updated ${state.metaTime || "pending first scrape"}`;
 
   if (!shown.length) {
-    listEl.innerHTML = `<div class="empty">No results to display yet.</div>`;
-  } else {
-    listEl.innerHTML = shown.map(it => `
-      <div class="row">
-        <div><a href="${it.url}" target="_blank" rel="noopener noreferrer"><strong>${sanitize(it.title)}</strong></a></div>
-        <div class="meta">${sanitize(it.source)} • ${it.posted_date || "date unknown"} ${it.deadline_date ? "• deadline " + it.deadline_date : ""}</div>
-        <div>${sanitize(it.description)}</div>
-        <div class="tags">${(it.tags||[]).map(t => `<span class="tag">${sanitize(t)}</span>`).join("")}</div>
-      </div>
-    `).join("");
+    listEl.innerHTML = `<div class="empty">No results match your filters.</div>`;
+    return;
   }
 
-  // Show filter once data is loaded
-  if (state.items.length && document.getElementById("controls").style.display !== "block") {
-    document.getElementById("controls").style.display = "block";
-    qEl.addEventListener("input", () => render(qEl.value));
-  }
+  listEl.innerHTML = shown.map(it => `
+    <div class="row">
+      <div><a href="${it.url}" target="_blank" rel="noopener noreferrer"><strong>${sanitize(it.title)}</strong></a></div>
+      <div class="meta">
+        ${sanitize(it.agency_name || it.source || "")}
+        ${it.opp_status ? " • " + sanitize(it.opp_status) : ""}
+        ${it.posted_date ? " • posted " + it.posted_date : ""}
+        ${it.deadline_date ? " • due " + it.deadline_date : ""}
+        ${it.opportunity_number ? " • " + sanitize(it.opportunity_number) : ""}
+      </div>
+      <div>${sanitize(it.description || "")}</div>
+      <div class="tags">
+        ${(it.funding_instruments||[]).map(t => `<span class="tag">${sanitize(t)}</span>`).join("")}
+        ${(it.funding_categories||[]).map(t => `<span class="tag">${sanitize(t)}</span>`).join("")}
+        ${(it.eligibilities||[]).map(t => `<span class="tag">${sanitize(t)}</span>`).join("")}
+        ${(it.alns||[]).map(t => `<span class="tag">ALN ${sanitize(t)}</span>`).join("")}
+      </div>
+    </div>
+  `).join("");
 }
 
 async function loadGrants() {
@@ -104,13 +236,22 @@ async function loadGrants() {
     btn.textContent = "Loading…";
     statsEl.textContent = "Fetching latest data…";
 
-    // Pages source is ROOT → JSON is at /data/grants.json relative to this page
     const res = await fetch("./data/grants.json?ts=" + Date.now(), { cache: "no-store" });
     if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
 
     state.items = Array.isArray(data.items) ? data.items : [];
     state.metaTime = data.generated_at || "";
+
+    // Starting keywords (from meta if present)
+    const fromMeta = (data.meta && data.meta.keywords && (data.meta.keywords["grants.gov"] || data.meta.keywords["grants_gov"])) || [];
+    state.defaultKeywords = Array.isArray(fromMeta) ? fromMeta : [];
+    state.userKeywords = [...state.defaultKeywords];
+
+    // Build facets & attach controls
+    buildFacets(state.items);
+    hydrateFilters();
+    renderKeywordChips();
     render();
   } catch (e) {
     statsEl.textContent = "Could not load data/grants.json yet.";
@@ -119,6 +260,22 @@ async function loadGrants() {
     btn.textContent = "Update / Load Grants";
   }
 }
+
+// Keyword controls
+document.getElementById("kwAddBtn").addEventListener("click", () => {
+  const inp = document.getElementById("kwInput");
+  const v = (inp.value || "").trim();
+  if (!v) return;
+  if (!state.userKeywords.includes(v)) state.userKeywords.push(v);
+  inp.value = "";
+  renderKeywordChips();
+  render();
+});
+document.getElementById("kwClearBtn").addEventListener("click", () => {
+  state.userKeywords = [];
+  renderKeywordChips();
+  render();
+});
 
 document.getElementById("loadBtn").addEventListener("click", loadGrants);
 </script>
