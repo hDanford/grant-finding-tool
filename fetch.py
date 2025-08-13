@@ -1,10 +1,9 @@
-# fetch.py
 import json, os, time, importlib, pkgutil, hashlib
 
-OUT = os.path.join("data", "grants.json")
-SCRAPER_PACKAGE = "scrapers"
+OUT = os.path.join("data", "grants.json")  # <-- root/data/grants.json
+os.makedirs(os.path.dirname(OUT), exist_ok=True)
 
-os.makedirs("data", exist_ok=True)
+SCRAPER_PACKAGE = "scrapers"
 
 def canonical(item):
     h = hashlib.sha256((item.get("title","") + item.get("url","")).encode("utf-8")).hexdigest()[:16]
@@ -15,10 +14,8 @@ def iter_scraper_modules():
     pkg = importlib.import_module(SCRAPER_PACKAGE)
     for m in pkgutil.iter_modules(pkg.__path__, prefix=pkg.__name__ + "."):
         name = m.name
-        # skip private/dunder modules
-        if name.rsplit(".", 1)[-1].startswith("_"):
+        if name.rsplit(".", 1)[-1].startswith("_"):  # skip private
             continue
-        # base and __init__ are helpers, not scrapers
         if name.endswith(".base") or name.endswith(".__init__"):
             continue
         yield importlib.import_module(name)
@@ -49,7 +46,7 @@ def main():
         seen.add(url)
         unique.append(canonical(it))
 
-    # Sort newest first by posted_date then title
+    # Sort newest first
     def key(x):
         d = x.get("posted_date") or "0000-00-00"
         return (d, (x.get("title") or "").lower())
