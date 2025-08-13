@@ -11,7 +11,7 @@ jobs:
     permissions:
       contents: write
     env:
-      SCRAPERS: "grants_gov"   # ← ensures only Grants.gov runs for now
+      SCRAPERS: "grants_gov,ohio_grants"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
