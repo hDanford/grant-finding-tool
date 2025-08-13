@@ -1,8 +1,8 @@
 {
-  "generated_at": "2025-08-13T16:43:11Z",
-  "count": 1023,
+  "generated_at": "2025-08-13T16:46:02Z",
+  "count": 1024,
   "source_counts": {
-    "grants.gov": 1023
+    "grants.gov": 1024
   },
   "items": [
     {
@@ -82,6 +82,19 @@
         "grants.gov"
       ],
       "id": "5a71f8e33fe09742"
+    },
+    {
+      "title": "Notice of Intent to issue Critical Minerals and Materials Accelerator Notice of Funding Opportunity",
+      "url": "https://www.grants.gov/search-results-detail/360290",
+      "source": "grants.gov",
+      "description": "Critical minerals and materials (CMM) are the building blocks for technologies foundational to U.S. energy dominance, national security, and industrial competitiveness. To build a secure domestic supply of CMMs, the U.S. Department of Energy (DOE) aims to support industry-led partnerships to prototype and pilot innovative processing technologies that are currently only proven at the bench scale so to address CMM challenges in high impact areas. The CMM Accelerator program will advance these mid-",
+      "posted_date": "2025-08-13",
+      "deadline_date": "2025-10-13",
+      "tags": [
+        "federal",
+        "grants.gov"
+      ],
+      "id": "136577944363ab31"
     },
     {
       "title": "NOI to Issue Infrastructure Investment and Jobs Act (IIJA) Funding Opportunity Announcement No. DE-FOA-0003587 titled &ldquo;Rare Earth Elements Demonstration Facility&rdquo;.",
