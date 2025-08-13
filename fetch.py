@@ -1,9 +1,13 @@
-import json, os, time, importlib, pkgutil, hashlib
+# fetch.py
+import json, os, time, importlib, pkgutil, hashlib, os as _os
+from collections import Counter
 
-OUT = os.path.join("data", "grants.json")  # <-- root/data/grants.json
+OUT = os.path.join("data", "grants.json")
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 
 SCRAPER_PACKAGE = "scrapers"
+# You can pin scrapers via env, e.g. SCRAPERS="grants_gov" or "grants_gov,dhs_frg"
+PINNED = {s.strip() for s in (_os.getenv("SCRAPERS") or "grants_gov").split(",") if s.strip()}
 
 def canonical(item):
     h = hashlib.sha256((item.get("title","") + item.get("url","")).encode("utf-8")).hexdigest()[:16]
@@ -14,24 +18,31 @@ def iter_scraper_modules():
     pkg = importlib.import_module(SCRAPER_PACKAGE)
     for m in pkgutil.iter_modules(pkg.__path__, prefix=pkg.__name__ + "."):
         name = m.name
-        if name.rsplit(".", 1)[-1].startswith("_"):  # skip private
+        leaf = name.rsplit(".", 1)[-1]
+        if leaf.startswith("_"):               # skip private/disabled files like _old.py
             continue
         if name.endswith(".base") or name.endswith(".__init__"):
+            continue
+        # Only run pinned scrapers
+        if PINNED and leaf not in PINNED:
             continue
         yield importlib.import_module(name)
 
 def run_all_scrapers():
     all_items = []
+    loaded = []
     for mod in iter_scraper_modules():
         fetcher = getattr(mod, "fetch", None)
         if not callable(fetcher):
             continue
+        loaded.append(mod.__name__)
         try:
             items = fetcher() or []
             all_items.extend(items)
-        except Exception:
-            # keep going even if one scraper fails
+        except Exception as e:
+            print(f"[WARN] {mod.__name__} failed: {e}")
             continue
+    print(f"[INFO] Loaded scrapers: {loaded or 'NONE'}")
     return all_items
 
 def main():
@@ -52,14 +63,18 @@ def main():
         return (d, (x.get("title") or "").lower())
     unique.sort(key=key, reverse=True)
 
+    # Source counts for debugging/visibility
+    counts = Counter([it.get("source") or "unknown" for it in unique])
+
     out = {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "count": len(unique),
+        "source_counts": counts,   # e.g., {"grants.gov": 52}
         "items": unique,
     }
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
-    print(f"Wrote {OUT} with {len(unique)} items")
+    print(f"[INFO] Wrote {OUT} with {len(unique)} items | by source: {dict(counts)}")
 
 if __name__ == "__main__":
     main()
