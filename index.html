@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>First Responder Wellness Grant Finder Tool</title>
   <style>
-    :root { --maxw: 1000px; }
-    body { font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; color:#111; display:flex; justify-content:center; }
+    :root { --maxw: 1100px; }
+    body { font: 16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; margin: 2rem; color:#111; display:flex; justify-content:center; }
     main { width:100%; max-width: var(--maxw); }
     h1 { margin: 0 0 .25rem; }
     p.sub { margin:.25rem 0 1rem; color:#555; }
@@ -32,7 +32,9 @@
     .empty { color:#666; font-style: italic; margin-top:.5rem; }
     .inline { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
     .pill { display:inline-flex; gap:.4rem; align-items:center; }
-    .pill input { margin-right:.35rem; }
+    .section-title { margin:.75rem 0 .35rem; font-weight:700; }
+    .counts { font-size:.9em; color:#444; }
+    .source-chip { background:#f0f7ff; }
   </style>
 </head>
 <body>
@@ -49,42 +51,63 @@
         <strong>Grants.gov Search (official API)</strong> —
         <a href="https://www.grants.gov/search-grants" target="_blank" rel="noopener noreferrer">search page</a>
       </li>
+      <li>
+        <strong>State of Ohio Funding Opportunities</strong> —
+        <a href="https://grants.ohio.gov/funding-opportunities" target="_blank" rel="noopener noreferrer">landing page</a>
+      </li>
     </ul>
 
     <button id="loadBtn" type="button">Update / Load Grants</button>
     <div class="bar" id="stats" aria-live="polite"></div>
-    <div class="muted">The button reads <code>data/grants.json</code> (built by your GitHub Action). Edit keywords & filters below to refine what you see.</div>
+    <div class="counts" id="sourceCounts"></div>
+    <div class="muted">The button reads <code>data/grants.json</code> (built by GitHub Actions). Choose sources & filters below.</div>
   </section>
 
-  <!-- Keyword editor + filters -->
+  <!-- Source selector -->
   <section class="controls card">
-    <h3 style="margin-top:0">Search keywords (editable)</h3>
+    <div class="section-title">Sources to include</div>
+    <div class="inline">
+      <label class="pill"><input type="checkbox" name="src" value="grants.gov" checked> <span class="chip source-chip">grants.gov</span></label>
+      <label class="pill"><input type="checkbox" name="src" value="ohio-grants" checked> <span class="chip source-chip">ohio-grants</span></label>
+    </div>
+
+    <div class="section-title">Search keywords (editable)</div>
     <div id="kwChips" class="inline" aria-live="polite"></div>
     <div class="inline" style="margin-top:.5rem;">
       <input id="kwInput" type="text" placeholder="Add keyword (e.g., 'first responder')" />
       <button id="kwAddBtn" type="button">Add keyword</button>
       <button id="kwClearBtn" type="button">Clear all</button>
     </div>
-    <div class="muted" style="margin-top:.25rem">These keywords filter the loaded results on this page. To change the scraper's default keywords, edit <code>scrapers/grants_gov.py</code> and push.</div>
+    <div class="muted" style="margin-top:.25rem">These keywords filter the loaded results on this page. To change the scraper defaults, edit the Python files in <code>scrapers/</code>.</div>
 
-    <h3>Filters</h3>
-    <div class="grid">
+    <!-- Site-specific filters -->
+    <div class="grid" style="margin-top:1rem">
+      <!-- Grants.gov filters -->
       <div class="col-6">
+        <div class="section-title">Grants.gov filters</div>
         <label><strong>Agency</strong></label><br/>
-        <select id="fAgency" multiple size="6" style="width:100%;"></select>
-      </div>
-      <div class="col-6">
+        <select id="ggAgency" multiple size="6" style="width:100%;"></select>
+        <div style="height:.5rem"></div>
         <label><strong>Grant type (Funding Instrument)</strong></label><br/>
-        <select id="fType" multiple size="6" style="width:100%;"></select>
-      </div>
-      <div class="col-12">
+        <select id="ggType" multiple size="6" style="width:100%;"></select>
+        <div style="height:.5rem"></div>
         <div class="inline">
           <span><strong>Status:</strong></span>
-          <label class="pill"><input type="checkbox" name="status" value="posted"> posted</label>
-          <label class="pill"><input type="checkbox" name="status" value="forecasted"> forecasted</label>
-          <label class="pill"><input type="checkbox" name="status" value="closed"> closed</label>
-          <label class="pill"><input type="checkbox" name="status" value="archived"> archived</label>
+          <label class="pill"><input type="checkbox" name="ggstatus" value="posted"> posted</label>
+          <label class="pill"><input type="checkbox" name="ggstatus" value="forecasted"> forecasted</label>
+          <label class="pill"><input type="checkbox" name="ggstatus" value="closed"> closed</label>
+          <label class="pill"><input type="checkbox" name="ggstatus" value="archived"> archived</label>
         </div>
+      </div>
+
+      <!-- Ohio filters -->
+      <div class="col-6">
+        <div class="section-title">Ohio (grants.ohio.gov) filters</div>
+        <label><strong>Ohio Agency</strong></label><br/>
+        <select id="ohAgency" multiple size="6" style="width:100%;"></select>
+        <div style="height:.5rem"></div>
+        <label><strong>Ohio Categories</strong></label><br/>
+        <select id="ohCats" multiple size="6" style="width:100%;"></select>
       </div>
     </div>
   </section>
@@ -99,119 +122,164 @@
 const state = {
   items: [],
   metaTime: "",
-  defaultKeywords: [],   // from JSON meta
-  userKeywords: [],      // editable list
-  facets: { agencies: [], types: [], statuses: [] },
-  selected: { agencies: new Set(), types: new Set(), statuses: new Set() },
+  defaultKeywords: [],
+  userKeywords: [],
+  sourceCounts: {},
+  selectedSources: new Set(["grants.gov","ohio-grants"]),
+
+  // facets
+  gg: { agencies: [], types: [], statuses: [] },
+  oh: { agencies: [], categories: [] },
+  sel: { ggAgencies:new Set(), ggTypes:new Set(), ggStatuses:new Set(),
+         ohAgencies:new Set(), ohCats:new Set() },
 };
 
-function sanitize(text) {
-  return (text || "").replace(/</g, "&lt;");
-}
+function sanitize(t){ return (t||"").replace(/</g,"&lt;"); }
+function uniqueSorted(a){ return [...new Set(a.filter(Boolean))].sort((x,y)=>x.localeCompare(y)); }
 
-function uniqueSorted(arr) {
-  return [...new Set(arr.filter(Boolean))].sort((a,b) => a.localeCompare(b));
-}
-
-function buildFacets(items) {
-  const agencies = [];
-  const types = [];
-  const statuses = [];
-  for (const it of items) {
-    if (it.agency_name) agencies.push(it.agency_name);
-    if (Array.isArray(it.funding_instruments)) types.push(...it.funding_instruments);
-    if (it.opp_status) statuses.push(it.opp_status);
+function buildFacets(items){
+  const ggA=[], ggT=[], ggS=[], ohA=[], ohC=[];
+  for(const it of items){
+    if(it.source==="grants.gov"){
+      if (it.agency_name) ggA.push(it.agency_name);
+      if (Array.isArray(it.funding_instruments)) ggT.push(...it.funding_instruments);
+      if (it.opp_status) ggS.push((it.opp_status||"").toLowerCase());
+    } else if (it.source==="ohio-grants"){
+      if (it.agency_name) ohA.push(it.agency_name);
+      if (Array.isArray(it.ohio_categories)) ohC.push(...it.ohio_categories);
+    }
   }
-  state.facets.agencies = uniqueSorted(agencies);
-  state.facets.types    = uniqueSorted(types);
-  state.facets.statuses = uniqueSorted(statuses);
-}
+  state.gg.agencies = uniqueSorted(ggA);
+  state.gg.types    = uniqueSorted(ggT);
+  state.gg.statuses = uniqueSorted(ggS);
+  state.oh.agencies = uniqueSorted(ohA);
+  state.oh.categories = uniqueSorted(ohC);
 
-function hydrateFilters() {
-  // Agencies
-  const fa = document.getElementById("fAgency");
-  fa.innerHTML = state.facets.agencies.map(a => `<option value="${sanitize(a)}">${sanitize(a)}</option>`).join("");
-  fa.addEventListener("change", () => {
-    state.selected.agencies = new Set([...fa.selectedOptions].map(o => o.value));
+  // hydrate controls
+  const ggAgency = document.getElementById("ggAgency");
+  ggAgency.innerHTML = state.gg.agencies.map(a=>`<option value="${sanitize(a)}">${sanitize(a)}</option>`).join("");
+  ggAgency.addEventListener("change", ()=>{
+    state.sel.ggAgencies = new Set([...ggAgency.selectedOptions].map(o=>o.value));
     render();
   });
 
-  // Types
-  const ft = document.getElementById("fType");
-  ft.innerHTML = state.facets.types.map(t => `<option value="${sanitize(t)}">${sanitize(t)}</option>`).join("");
-  ft.addEventListener("change", () => {
-    state.selected.types = new Set([...ft.selectedOptions].map(o => o.value));
+  const ggType = document.getElementById("ggType");
+  ggType.innerHTML = state.gg.types.map(t=>`<option value="${sanitize(t)}">${sanitize(t)}</option>`).join("");
+  ggType.addEventListener("change", ()=>{
+    state.sel.ggTypes = new Set([...ggType.selectedOptions].map(o=>o.value));
     render();
   });
 
-  // Status checkboxes
-  document.querySelectorAll("input[name='status']").forEach(cb => {
-    cb.addEventListener("change", () => {
-      const s = new Set();
-      document.querySelectorAll("input[name='status']:checked").forEach(x => s.add(x.value));
-      state.selected.statuses = s;
+  document.querySelectorAll("input[name='ggstatus']").forEach(cb=>{
+    cb.addEventListener("change", ()=>{
+      const s=new Set();
+      document.querySelectorAll("input[name='ggstatus']:checked").forEach(x=>s.add(x.value));
+      state.sel.ggStatuses = s; render();
+    });
+  });
+
+  const ohAgency = document.getElementById("ohAgency");
+  ohAgency.innerHTML = state.oh.agencies.map(a=>`<option value="${sanitize(a)}">${sanitize(a)}</option>`).join("");
+  ohAgency.addEventListener("change", ()=>{
+    state.sel.ohAgencies = new Set([...ohAgency.selectedOptions].map(o=>o.value));
+    render();
+  });
+
+  const ohCats = document.getElementById("ohCats");
+  ohCats.innerHTML = state.oh.categories.map(c=>`<option value="${sanitize(c)}">${sanitize(c)}</option>`).join("");
+  ohCats.addEventListener("change", ()=>{
+    state.sel.ohCats = new Set([...ohCats.selectedOptions].map(o=>o.value));
+    render();
+  });
+
+  // source checkboxes
+  document.querySelectorAll("input[name='src']").forEach(cb=>{
+    cb.checked = state.selectedSources.has(cb.value);
+    cb.addEventListener("change", ()=>{
+      if(cb.checked) state.selectedSources.add(cb.value);
+      else state.selectedSources.delete(cb.value);
       render();
     });
   });
 }
 
-function renderKeywordChips() {
+function renderKeywordChips(){
   const wrap = document.getElementById("kwChips");
-  if (!state.userKeywords.length) {
+  if(!state.userKeywords.length){
     wrap.innerHTML = `<span class="muted">No keywords set. (Showing all loaded results)</span>`;
     return;
   }
-  wrap.innerHTML = state.userKeywords.map((kw, i) => `
+  wrap.innerHTML = state.userKeywords.map((kw,i)=>`
     <span class="chip">${sanitize(kw)} <button data-idx="${i}" title="Remove ${sanitize(kw)}">×</button></span>
   `).join("");
-  wrap.querySelectorAll("button[data-idx]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const idx = Number(btn.getAttribute("data-idx"));
-      state.userKeywords.splice(idx, 1);
-      renderKeywordChips();
-      render();
+  wrap.querySelectorAll("button[data-idx]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const idx=Number(btn.getAttribute("data-idx"));
+      state.userKeywords.splice(idx,1);
+      renderKeywordChips(); render();
     });
   });
 }
 
-function render() {
+function appliesSource(it){
+  return state.selectedSources.has(it.source);
+}
+
+function appliesSiteFilters(it){
+  if(it.source==="grants.gov"){
+    if (state.sel.ggAgencies.size && !state.sel.ggAgencies.has(it.agency_name)) return false;
+    if (state.sel.ggTypes.size) {
+      const ok = (it.funding_instruments||[]).some(t=>state.sel.ggTypes.has(t));
+      if(!ok) return false;
+    }
+    if (state.sel.ggStatuses.size) {
+      const st=(it.opp_status||"").toLowerCase();
+      if(!state.sel.ggStatuses.has(st)) return false;
+    }
+  }
+  if(it.source==="ohio-grants"){
+    if (state.sel.ohAgencies.size && !state.sel.ohAgencies.has(it.agency_name)) return false;
+    if (state.sel.ohCats.size) {
+      const ok = (it.ohio_categories||[]).some(c=>state.sel.ohCats.has(c));
+      if(!ok) return false;
+    }
+  }
+  return true;
+}
+
+function render(){
   const listEl = document.getElementById("list");
   const statsEl = document.getElementById("stats");
+  const scEl = document.getElementById("sourceCounts");
 
-  // Apply filters to items
-  const kw = state.userKeywords.map(s => s.toLowerCase());
-  const shown = state.items.filter(it => {
-    // Keyword filter (ANY match among keywords)
-    if (kw.length) {
-      const blob = [it.title, it.description, it.agency_name, (it.tags||[]).join(" "), (it.funding_instruments||[]).join(" ")].join(" ").toLowerCase();
-      const any = kw.some(k => blob.includes(k));
-      if (!any) return false;
+  const kw = state.userKeywords.map(s=>s.toLowerCase());
+  const shown = state.items.filter(it=>{
+    if(!appliesSource(it)) return false;
+
+    // Keyword filter (ANY)
+    if(kw.length){
+      const blob = [it.title, it.description, it.agency_name, (it.tags||[]).join(" "), (it.funding_instruments||[]).join(" "), (it.ohio_categories||[]).join(" ")].join(" ").toLowerCase();
+      if(!kw.some(k=>blob.includes(k))) return false;
     }
-    // Agency filter
-    if (state.selected.agencies.size && !state.selected.agencies.has(it.agency_name)) return false;
-    // Type filter
-    if (state.selected.types.size) {
-      const found = (it.funding_instruments||[]).some(t => state.selected.types.has(t));
-      if (!found) return false;
-    }
-    // Status filter
-    if (state.selected.statuses.size && !state.selected.statuses.has((it.opp_status||"").toLowerCase())) return false;
+
+    // Site-specific filters
+    if(!appliesSiteFilters(it)) return false;
 
     return true;
   });
 
   statsEl.textContent = `${shown.length} result${shown.length===1?"":"s"} — updated ${state.metaTime || "pending first scrape"}`;
+  scEl.textContent = Object.keys(state.sourceCounts||{}).length
+    ? "By source: " + Object.entries(state.sourceCounts).map(([k,v])=>`${k}=${v}`).join(" · ")
+    : "";
 
-  if (!shown.length) {
-    listEl.innerHTML = `<div class="empty">No results match your filters.</div>`;
-    return;
-  }
+  if(!shown.length){ listEl.innerHTML = `<div class="empty">No results match your filters.</div>`; return; }
 
-  listEl.innerHTML = shown.map(it => `
+  listEl.innerHTML = shown.map(it=>`
     <div class="row">
       <div><a href="${it.url}" target="_blank" rel="noopener noreferrer"><strong>${sanitize(it.title)}</strong></a></div>
       <div class="meta">
-        ${sanitize(it.agency_name || it.source || "")}
+        ${sanitize(it.source)}${it.agency_name ? " • " + sanitize(it.agency_name) : ""}
         ${it.opp_status ? " • " + sanitize(it.opp_status) : ""}
         ${it.posted_date ? " • posted " + it.posted_date : ""}
         ${it.deadline_date ? " • due " + it.deadline_date : ""}
@@ -219,62 +287,57 @@ function render() {
       </div>
       <div>${sanitize(it.description || "")}</div>
       <div class="tags">
-        ${(it.funding_instruments||[]).map(t => `<span class="tag">${sanitize(t)}</span>`).join("")}
-        ${(it.funding_categories||[]).map(t => `<span class="tag">${sanitize(t)}</span>`).join("")}
-        ${(it.eligibilities||[]).map(t => `<span class="tag">${sanitize(t)}</span>`).join("")}
-        ${(it.alns||[]).map(t => `<span class="tag">ALN ${sanitize(t)}</span>`).join("")}
+        ${(it.funding_instruments||[]).map(t=>`<span class="tag">${sanitize(t)}</span>`).join("")}
+        ${(it.funding_categories||[]).map(t=>`<span class="tag">${sanitize(t)}</span>`).join("")}
+        ${(it.eligibilities||[]).map(t=>`<span class="tag">${sanitize(t)}</span>`).join("")}
+        ${(it.ohio_categories||[]).map(t=>`<span class="tag">${sanitize(t)}</span>`).join("")}
+        ${(it.alns||[]).map(t=>`<span class="tag">ALN ${sanitize(t)}</span>`).join("")}
       </div>
     </div>
   `).join("");
 }
 
-async function loadGrants() {
-  const statsEl = document.getElementById("stats");
-  const btn = document.getElementById("loadBtn");
-  try {
-    btn.disabled = true;
-    btn.textContent = "Loading…";
-    statsEl.textContent = "Fetching latest data…";
+async function loadGrants(){
+  const statsEl=document.getElementById("stats");
+  const btn=document.getElementById("loadBtn");
+  try{
+    btn.disabled=true; btn.textContent="Loading…";
+    statsEl.textContent="Fetching latest data…";
 
-    const res = await fetch("./data/grants.json?ts=" + Date.now(), { cache: "no-store" });
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    const res = await fetch("./data/grants.json?ts="+Date.now(), {cache:"no-store"});
+    if(!res.ok) throw new Error("HTTP "+res.status);
     const data = await res.json();
 
-    state.items = Array.isArray(data.items) ? data.items : [];
+    state.items = Array.isArray(data.items)? data.items: [];
     state.metaTime = data.generated_at || "";
+    state.sourceCounts = data.source_counts || {};
 
-    // Starting keywords (from meta if present)
-    const fromMeta = (data.meta && data.meta.keywords && (data.meta.keywords["grants.gov"] || data.meta.keywords["grants_gov"])) || [];
-    state.defaultKeywords = Array.isArray(fromMeta) ? fromMeta : [];
+    // Defaults from meta.keywords
+    const metaKW = (data.meta && data.meta.keywords) || {};
+    const keysets = Object.values(metaKW).flat();
+    state.defaultKeywords = [...new Set(keysets)];
     state.userKeywords = [...state.defaultKeywords];
 
-    // Build facets & attach controls
     buildFacets(state.items);
-    hydrateFilters();
     renderKeywordChips();
     render();
-  } catch (e) {
+  }catch(e){
     statsEl.textContent = "Could not load data/grants.json yet.";
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Update / Load Grants";
+  }finally{
+    btn.disabled=false; btn.textContent="Update / Load Grants";
   }
 }
 
 // Keyword controls
-document.getElementById("kwAddBtn").addEventListener("click", () => {
-  const inp = document.getElementById("kwInput");
-  const v = (inp.value || "").trim();
-  if (!v) return;
-  if (!state.userKeywords.includes(v)) state.userKeywords.push(v);
-  inp.value = "";
-  renderKeywordChips();
-  render();
+document.getElementById("kwAddBtn").addEventListener("click", ()=>{
+  const inp=document.getElementById("kwInput");
+  const v=(inp.value||"").trim();
+  if(!v) return;
+  if(!state.userKeywords.includes(v)) state.userKeywords.push(v);
+  inp.value=""; renderKeywordChips(); render();
 });
-document.getElementById("kwClearBtn").addEventListener("click", () => {
-  state.userKeywords = [];
-  renderKeywordChips();
-  render();
+document.getElementById("kwClearBtn").addEventListener("click", ()=>{
+  state.userKeywords=[]; renderKeywordChips(); render();
 });
 
 document.getElementById("loadBtn").addEventListener("click", loadGrants);
