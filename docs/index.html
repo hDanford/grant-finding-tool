@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>First Responder Wellness Grants</title>
+  <style>
+    body { font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; color:#111; }
+    h1 { margin-top: 0; }
+    .row { margin: 1rem 0; padding: 1rem; border: 1px solid #eee; border-radius: 10px; }
+    input { width: 100%; max-width: 680px; padding: .6rem .8rem; border-radius: 8px; border: 1px solid #ccc; }
+    .meta { font-size: .9em; color: #555; margin-top: .25rem; }
+    .tags { font-size: .85em; color:#444; margin-top: .25rem; }
+    .tag { background:#eef; padding:.1rem .4rem; margin-right:.35rem; border-radius:.4rem; display:inline-block; }
+    .bar { margin: .5rem 0 1rem; }
+  </style>
+</head>
+<body>
+  <h1>First Responder Wellness Grant Finder</h1>
+  <p>Search grants supporting <strong>wellness programs</strong>, <strong>psych evaluations</strong>, <strong>critical incident stress debriefing</strong>, and <strong>fitness for duty</strong>.</p>
+  <input id="q" placeholder="Search: e.g. wellness, psychological, fitness for duty, Ohio, DHS" />
+  <div class="bar" id="stats"></div>
+  <div id="list"></div>
+
+<script>
+async function load() {
+  try {
+    const res = await fetch("../data/grants.json?ts=" + Date.now());
+    const data = await res.json();
+    const items = data.items || [];
+    const listEl = document.getElementById("list");
+    const statsEl = document.getElementById("stats");
+    const qEl = document.getElementById("q");
+
+    function render(filter="") {
+      const f = filter.trim().toLowerCase();
+      const shown = !f ? items : items.filter(it => {
+        const blob = [it.title, it.description, it.source, (it.tags||[]).join(" ")].join(" ").toLowerCase();
+        return f.split(/\s+/).every(tok => blob.includes(tok));
+      });
+      statsEl.textContent = `${shown.length} results — updated ${data.generated_at || "pending first scrape"}`;
+      listEl.innerHTML = shown.map(it => `
+        <div class="row">
+          <div><a href="${it.url}" target="_blank" rel="noopener noreferrer"><strong>${it.title}</strong></a></div>
+          <div class="meta">${it.source} • ${it.posted_date || "date unknown"} ${it.deadline_date ? "• deadline " + it.deadline_date : ""}</div>
+          <div>${(it.description || "").replace(/</g,"&lt;")}</div>
+          <div class="tags">${(it.tags||[]).map(t => `<span class="tag">${t}</span>`).join("")}</div>
+        </div>
+      `).join("");
+    }
+
+    qEl.addEventListener("input", () => render(qEl.value));
+    render();
+  } catch (e) {
+    document.getElementById("stats").textContent = "Could not load data/grants.json yet.";
+  }
+}
+load();
+</script>
+</body>
+</html>
