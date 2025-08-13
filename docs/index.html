@@ -5,59 +5,112 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>First Responder Wellness Grant Finder</title>
   <style>
-    body { font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; color:#111; }
-    h1 { margin-top: 0; }
-    .row { margin: 1rem 0; padding: 1rem; border: 1px solid #eee; border-radius: 10px; background: #fafafa; }
-    input { width: 100%; max-width: 680px; padding: .6rem .8rem; border-radius: 8px; border: 1px solid #ccc; }
+    :root { --maxw: 880px; }
+    body { font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; color:#111; display:flex; justify-content:center; }
+    main { width:100%; max-width: var(--maxw); }
+    h1 { margin: 0 0 .25rem; }
+    p.sub { margin:.25rem 0 1rem; color:#555; }
+    .card { border:1px solid #eee; border-radius:12px; padding:1rem; background:#fafafa; }
+    .row { margin: .8rem 0; padding: 1rem; border: 1px solid #eee; border-radius: 10px; background: #fff; }
     .meta { font-size: .9em; color: #555; margin-top: .25rem; }
     .tags { font-size: .85em; color:#444; margin-top: .25rem; }
     .tag { background:#eef; padding:.1rem .4rem; margin-right:.35rem; border-radius:.4rem; display:inline-block; }
-    .bar { margin: .5rem 0 1rem; }
-    a { color: #0645ad; text-decoration: none; }
-    a:hover { text-decoration: underline; }
+    .bar { margin: .75rem 0 1rem; min-height: 1.2em; color:#333; }
+    button { padding: .6rem .95rem; border-radius: 10px; border:1px solid #ccc; background:#fff; cursor:pointer; font-weight:600; }
+    button:hover { background:#f3f3f3; }
+    ul { margin:.25rem 0 .5rem 1.1rem; }
+    a { color:#0645ad; text-decoration:none; }
+    a:hover { text-decoration:underline; }
+    .muted { color:#666; font-size:.9em; }
   </style>
 </head>
 <body>
+<main>
+  <!-- Header / Name -->
   <h1>First Responder Wellness Grant Finder</h1>
-  <p>Search grants supporting <strong>wellness programs</strong>, <strong>psych evaluations</strong>, <strong>critical incident stress debriefing</strong>, and <strong>fitness for duty</strong>.</p>
-  <input id="q" placeholder="Search: e.g. wellness, psychological, fitness for duty, Ohio, DHS" />
-  <div class="bar" id="stats"></div>
-  <div id="list"></div>
+  <p class="sub">Find grants supporting wellness programs, psych evaluations, critical incident stress debriefing, and fitness for duty.</p>
+
+  <!-- Sources + Update button -->
+  <section class="card">
+    <h2 style="margin-top:0">Sources used</h2>
+    <ul>
+      <li><strong>DHS S&amp;T First Responder Grants</strong> — <a href="https://www.dhs.gov/science-and-technology/frg-grants" target="_blank" rel="noopener noreferrer">official page</a></li>
+    </ul>
+
+    <button id="loadBtn" type="button">Update / Load Grants</button>
+    <div class="bar" id="stats" aria-live="polite"></div>
+    <div class="muted">Tip: the button pulls the latest published data from <code>data/grants.json</code>.</div>
+  </section>
+
+  <!-- Results -->
+  <section style="margin-top:1.25rem">
+    <div id="controls" style="display:none; margin-bottom:.5rem;">
+      <input id="q" placeholder="Filter results (e.g., wellness, Ohio, DHS)" style="width:100%; max-width: 680px; padding:.6rem .8rem; border-radius:8px; border:1px solid #ccc;" />
+    </div>
+    <div id="list"></div>
+  </section>
+</main>
 
 <script>
-async function load() {
-  try {
-    const res = await fetch("../data/grants.json?ts=" + Date.now()); // adjust path if needed
-    const data = await res.json();
-    const items = data.items || [];
-    const listEl = document.getElementById("list");
-    const statsEl = document.getElementById("stats");
-    const qEl = document.getElementById("q");
+const state = { items: [], metaTime: "" };
 
-    function render(filter="") {
-      const f = filter.trim().toLowerCase();
-      const shown = !f ? items : items.filter(it => {
-        const blob = [it.title, it.description, it.source, (it.tags||[]).join(" ")].join(" ").toLowerCase();
-        return f.split(/\s+/).every(tok => blob.includes(tok));
-      });
-      statsEl.textContent = `${shown.length} results — updated ${data.generated_at || "pending first scrape"}`;
-      listEl.innerHTML = shown.map(it => `
-        <div class="row">
-          <div><a href="${it.url}" target="_blank" rel="noopener noreferrer"><strong>${it.title}</strong></a></div>
-          <div class="meta">${it.source} • ${it.posted_date || "date unknown"} ${it.deadline_date ? "• deadline " + it.deadline_date : ""}</div>
-          <div>${(it.description || "").replace(/</g,"&lt;")}</div>
-          <div class="tags">${(it.tags||[]).map(t => `<span class="tag">${t}</span>`).join("")}</div>
-        </div>
-      `).join("");
-    }
+function sanitize(text) {
+  return (text || "").replace(/</g, "&lt;");
+}
 
+function render(filter="") {
+  const listEl = document.getElementById("list");
+  const statsEl = document.getElementById("stats");
+  const qEl = document.getElementById("q");
+
+  const f = (filter || "").trim().toLowerCase();
+  const shown = !f ? state.items : state.items.filter(it => {
+    const blob = [it.title, it.description, it.source, (it.tags||[]).join(" ")].join(" ").toLowerCase();
+    return f.split(/\s+/).every(tok => blob.includes(tok));
+  });
+
+  statsEl.textContent = `${shown.length} result${shown.length===1?"":"s"} — updated ${state.metaTime || "pending first scrape"}`;
+  listEl.innerHTML = shown.map(it => `
+    <div class="row">
+      <div><a href="${it.url}" target="_blank" rel="noopener noreferrer"><strong>${sanitize(it.title)}</strong></a></div>
+      <div class="meta">${sanitize(it.source)} • ${it.posted_date || "date unknown"} ${it.deadline_date ? "• deadline " + it.deadline_date : ""}</div>
+      <div>${sanitize(it.description)}</div>
+      <div class="tags">${(it.tags||[]).map(t => `<span class="tag">${sanitize(t)}</span>`).join("")}</div>
+    </div>
+  `).join("");
+
+  // Show filter once data is loaded
+  if (state.items.length && document.getElementById("controls").style.display !== "block") {
+    document.getElementById("controls").style.display = "block";
     qEl.addEventListener("input", () => render(qEl.value));
-    render();
-  } catch (e) {
-    document.getElementById("stats").textContent = "Could not load data/grants.json yet.";
   }
 }
-load();
+
+async function loadGrants() {
+  const statsEl = document.getElementById("stats");
+  const btn = document.getElementById("loadBtn");
+  try {
+    btn.disabled = true;
+    btn.textContent = "Loading…";
+    statsEl.textContent = "Fetching latest data…";
+
+    // Cache-bust with timestamp; path assumes this file lives in /docs
+    const res = await fetch("../data/grants.json?ts=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+
+    state.items = Array.isArray(data.items) ? data.items : [];
+    state.metaTime = data.generated_at || "";
+    render();
+  } catch (e) {
+    statsEl.textContent = "Could not load data/grants.json yet.";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Update / Load Grants";
+  }
+}
+
+document.getElementById("loadBtn").addEventListener("click", loadGrants);
 </script>
 </body>
 </html>
