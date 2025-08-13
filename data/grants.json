@@ -1,5 +1,132 @@
 {
-  "generated_at": "",
-  "count": 0,
-  "items": []
+  "generated_at": "2025-08-13T14:49:21Z",
+  "count": 9,
+  "items": [
+    {
+      "title": "Training Opportunities",
+      "url": "https://www.dhs.gov/science-and-technology/frg-training",
+      "source": "dhs_frg",
+      "description": "Offered by government agencies, our Training Resources page provides a list of resources where First Responders can obtain training on a wide range of topics including but not limited to bioterrorism, emergency preparedness, and suicide prevention. Association of Schools and Programs of Public Health Since 2000, schools of public health have played an essential role in reaching and teaching the public health preparedness workforce through research, education and training. SPH collaborate with go",
+      "posted_date": null,
+      "deadline_date": null,
+      "tags": [
+        "first-responders",
+        "federal",
+        "dhs"
+      ],
+      "id": "0de7fa57d2f21a37"
+    },
+    {
+      "title": "Rural Emergency Medical Communications Demonstration Project (REMCDP)",
+      "url": "https://www.dhs.gov/remcdp",
+      "source": "dhs_frg",
+      "description": "The Cybersecurity and Infrastructure Security Agency (CISA) supports and promotes communications capabilities used by emergency responders and government officials across the country. In its efforts to advance interoperability, CISA develops the National Emergency Communications Plan (NECP), which is the nation's strategic plan that establishes goals, objectives, and actions to enhance and improve interoperable and operable emergency communications. The NECP recommends improved planning and coor",
+      "posted_date": null,
+      "deadline_date": null,
+      "tags": [
+        "first-responders",
+        "federal",
+        "dhs"
+      ],
+      "id": "e7b5d5e6d3a4a00a"
+    },
+    {
+      "title": "Research & Development",
+      "url": "https://www.dhs.gov/science-and-technology/research",
+      "source": "dhs_frg",
+      "description": "The Science and Technology Directorate (S&T) fosters the tools, technologies, and knowledge products needed to secure our nation. S&T's research and development are driven by the Department of Homeland Security's core mission areas. Our program managers, scientists, engineers, technology specialists , and subject matter experts work directly with DHS component agencies and first responders nationwide to understand their unique needs and challenges, identify capability gaps, and deliver timely an",
+      "posted_date": null,
+      "deadline_date": null,
+      "tags": [
+        "first-responders",
+        "federal",
+        "dhs"
+      ],
+      "id": "cc9b45f0427ed924"
+    },
+    {
+      "title": "Public Safety Communications",
+      "url": "https://www.dhs.gov/science-and-technology/fr-public-safety-comms",
+      "source": "dhs_frg",
+      "description": "The Science and Technology Directorate (S&T) is focused on building a more resilient and responsive public safety ecosystem. Our research, development, testing and evaluation activities in the domain of public safety communications are essential for creating a robust, interconnected, and secure emergency response communication infrastructure. Effective communication is a cornerstone of emergency response, and S&T is dedicated to ensuring that first responders have access to reliable, interoperab",
+      "posted_date": null,
+      "deadline_date": null,
+      "tags": [
+        "first-responders",
+        "federal",
+        "dhs"
+      ],
+      "id": "d9008b5bbd0f870a"
+    },
+    {
+      "title": "Protective Gear",
+      "url": "https://www.dhs.gov/science-and-technology/fr-protective-gear",
+      "source": "dhs_frg",
+      "description": "The Science and Technology Directorate (S&T) plays a critical role in the research, development, test, and evaluation of personal protective gear for first responders. This mission is vital in ensuring that firefighters, law enforcement, emergency medical technicians, and front-line operators across disciplines are equipped with the most advanced and effective protective equipment available. By leveraging cutting-edge technology and innovative research methodologies, S&T works to enhance the saf",
+      "posted_date": null,
+      "deadline_date": null,
+      "tags": [
+        "first-responders",
+        "federal",
+        "dhs"
+      ],
+      "id": "0327c764963bf0bd"
+    },
+    {
+      "title": "Grants Resources",
+      "url": "https://www.dhs.gov/science-and-technology/frg-grants",
+      "source": "dhs_frg",
+      "description": "Offered by FEMA and other government agencies, our Grants Resources page lists resources where First Responders can obtain grants for a range of needs, including firefighter grants, emergency medical service grants, and pre-disaster mitigation grants. For a more comprehensive list of federal grants, searchable by keyword or other criteria, visit Grants.gov . On Grants.gov, the first responder community can also learn about the federal grants lifecycle and grants management policies. Assistance t",
+      "posted_date": null,
+      "deadline_date": null,
+      "tags": [
+        "first-responders",
+        "federal",
+        "dhs"
+      ],
+      "id": "93ad657a79e0be09"
+    },
+    {
+      "title": "Grant Resources & Training Opportunities",
+      "url": "https://www.dhs.gov/science-and-technology/grants-trainings",
+      "source": "dhs_frg",
+      "description": "The Science and Technology Directorate (S&T) is committed to supporting first responders by providing comprehensive information about grants resources and training opportunities specifically designed to enhance their capabilities. Recognizing the critical role that first responders play in safeguarding communities, S&T provides information about available funding opportunities that can aid in acquiring advanced equipment, implementing new technologies, and enhancing operational readiness. This c",
+      "posted_date": null,
+      "deadline_date": null,
+      "tags": [
+        "first-responders",
+        "federal",
+        "dhs"
+      ],
+      "id": "dd945c824a1b1b0a"
+    },
+    {
+      "title": "First Responder Technologies",
+      "url": "https://www.dhs.gov/science-and-technology/fr-technologies",
+      "source": "dhs_frg",
+      "description": "The Science and Technology Directorate (S&T) serves a pivotal role in the research, development, test, and evaluation of technologies designed to support first responders. This initiative is essential for providing firefighters, law enforcement, emergency management personnel and other front-line operators with state-of-the-art tools and systems that enhance their operational efficiency and safety. S&T's approach to first responder technologies is characterized by strong collaboration with feder",
+      "posted_date": null,
+      "deadline_date": null,
+      "tags": [
+        "first-responders",
+        "federal",
+        "dhs"
+      ],
+      "id": "ad10f6371b9ba9f4"
+    },
+    {
+      "title": "First Responder Capability",
+      "url": "https://www.dhs.gov/science-and-technology/first-responders-capability",
+      "source": "dhs_frg",
+      "description": "S&T is working to identify the best ways to incorporate AI/ML into daily operations. The Science and Technology Directorate's (S&T) First Responder Capability Program is an initiative aimed at enhancing the operational capabilities and safety of first responders. The program is designed to address the unique and evolving challenges faced by emergency personnel by developing, testing, and deploying innovative technologies and solutions. Our work emphasizes collaboration and user-centered design, ",
+      "posted_date": null,
+      "deadline_date": null,
+      "tags": [
+        "first-responders",
+        "federal",
+        "dhs"
+      ],
+      "id": "09593898ed19e5b0"
+    }
+  ]
 }
