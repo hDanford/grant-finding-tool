@@ -1,13 +1,17 @@
 name: scrape
 on:
   push:
+  workflow_dispatch: {}   # allow manual "Run workflow" from Actions tab
   schedule:
     - cron: "23 9 * * *"   # daily 09:23 UTC
+
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      SCRAPERS: "grants_gov"   # ← ensures only Grants.gov runs for now
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
